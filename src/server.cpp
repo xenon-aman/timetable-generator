@@ -45,8 +45,9 @@ int main() {
                 std::string email = body.at("email").get<std::string>();
                 std::string password = body.at("password").get<std::string>();
 
-                auto rows = db.query(
-                    "SELECT id, password_hash, role, institution_id FROM users WHERE email = '" + email + "'"
+               auto rows = db.queryPrepared(
+                    "SELECT id, password_hash, role, institution_id FROM users WHERE email = ?",
+                    {email}
                 );
 
                 if (rows.empty()) {
