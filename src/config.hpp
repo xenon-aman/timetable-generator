@@ -9,6 +9,7 @@ struct AppConfig {
     std::string db_name;
     std::string db_user;
     std::string db_password;
+    std::string jwt_secret;
 
     static AppConfig load(const std::string& path) {
         std::ifstream file(path);
@@ -24,6 +25,7 @@ struct AppConfig {
         cfg.db_name     = j.at("db_name").get<std::string>();
         cfg.db_user     = j.at("db_user").get<std::string>();
         cfg.db_password = j.at("db_password").get<std::string>();
+        cfg.jwt_secret  = j.at("jwt_secret").get<std::string>();
         return cfg;
     }
 };
