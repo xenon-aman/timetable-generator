@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Subjects - Timetable Generator</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav>
+        <a href="subjects.html">Subjects</a>
+        <a href="teachers.html">Teachers</a>
+        <a href="rooms.html">Rooms</a>
+        <a href="classes.html">Classes</a>
+        <div class="spacer"></div>
+        <button onclick="logout()">Logout</button>
+    </nav>
+
+    <main>
+        <h1>Subjects</h1>
+
+        <div class="form-box">
+            <input type="text" id="name" placeholder="Subject name">
+            <label><input type="checkbox" id="isLab"> Is Lab</label>
+            <button onclick="createSubject()">Add Subject</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr><th>Name</th><th>Type</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="subjectRows"></tbody>
+        </table>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        requireLogin();
+
+        async function loadSubjects() {
+            const subjects = await apiFetch("/api/v1/subjects");
+            const rows = document.getElementById("subjectRows");
+            rows.innerHTML = "";
+            subjects.forEach(s => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${s.name}</td>
+                    <td>${s.is_lab ? "Lab" : "Classroom subject"}</td>
+                    <td class="actions">
+                        <button class="edit" onclick="editSubject(${s.id}, '${s.name}', ${s.is_lab})">Edit</button>
+                        <button class="delete" onclick="deleteSubject(${s.id})">Delete</button>
+                    </td>
+                `;
+                rows.appendChild(tr);
+            });
+        }
+
+        async function createSubject() {
+            const name = document.getElementById("name").value.trim();
+            const isLab = document.getElementById("isLab").checked;
+            if (!name) return alert("Please enter a subject name");
+
+            await apiFetch("/api/v1/subjects", {
+                method: "POST",
+                body: JSON.stringify({ name, is_lab: isLab })
+            });
+            document.getElementById("name").value = "";
+            document.getElementById("isLab").checked = false;
+            loadSubjects();
+        }
+
+        async function editSubject(id, currentName, currentIsLab) {
+            const name = prompt("Subject name:", currentName);
+            if (name === null) return;
+            const isLab = confirm("Is this a lab subject? (OK = yes, Cancel = no)");
+
+            await apiFetch(`/api/v1/subjects/${id}`, {
+                method: "PUT",
+                body: JSON.stringify({ name, is_lab: isLab })
+            });
+            loadSubjects();
+        }
+
+                async function deleteSubject(id) {
+            if (!confirm("Delete this subject?")) return;
+            try {
+                await apiFetch(`/api/v1/subjects/${id}`, { method: "DELETE" });
+                loadSubjects();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        loadSubjects();
+    </script>
+</body>
+</html>

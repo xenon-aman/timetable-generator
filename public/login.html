@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Timetable Generator</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="login-box">
+        <h1 style="margin-bottom: 20px;">Sign in</h1>
+        <input type="email" id="email" placeholder="Email" value="admin@demoschool.test">
+        <input type="password" id="password" placeholder="Password" value="Admin@123">
+        <button onclick="doLogin()">Login</button>
+        <div class="error" id="error"></div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        async function doLogin() {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            const errorBox = document.getElementById("error");
+            errorBox.textContent = "";
+
+            try {
+                const res = await fetch(API_BASE + "/api/v1/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    errorBox.textContent = data.error || "Login failed";
+                    return;
+                }
+
+                setToken(data.token);
+                window.location.href = "subjects.html";
+            } catch (e) {
+                errorBox.textContent = "Could not reach the server";
+            }
+        }
+    </script>
+</body>
+</html>

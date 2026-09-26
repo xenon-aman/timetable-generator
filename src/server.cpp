@@ -21,6 +21,7 @@ int main() {
         TokenService tokens(cfg.jwt_secret);
 
         httplib::Server svr;
+        svr.set_mount_point("/", "./public");
 
         // Reads the "Authorization: Bearer <token>" header, verifies it, and
         // (if allowedRoles is non-empty) checks the token's role is in that list.
@@ -198,18 +199,23 @@ int main() {
             }
         });
 
-        svr.Delete(R"(/api/v1/classes/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+                svr.Delete(R"(/api/v1/subjects/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
             auto decoded = requireAuth(req, res, {"admin"});
             if (!decoded) return;
 
-            std::string instId = decoded->get_payload_claim("institution_id").as_string();
-            std::string classId = req.matches[1];
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                std::string subjectId = req.matches[1];
 
-            db.queryPrepared(
-                "DELETE FROM classes WHERE id = ? AND institution_id = ?",
-                {classId, instId}
-            );
-            res.set_content("{\"message\":\"Class deleted\"}", "application/json");
+                db.queryPrepared(
+                    "DELETE FROM subjects WHERE id = ? AND institution_id = ?",
+                    {subjectId, instId}
+                );
+                res.set_content("{\"message\":\"Subject deleted\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 409;
+                res.set_content("{\"error\":\"Cannot delete this subject, it is still used in one or more assignments\"}", "application/json");
+            }
         });
         svr.Post("/api/v1/subjects", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
             auto decoded = requireAuth(req, res, {"admin"});
@@ -335,18 +341,23 @@ int main() {
             }
         });
 
-        svr.Delete(R"(/api/v1/teachers/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+                svr.Delete(R"(/api/v1/teachers/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
             auto decoded = requireAuth(req, res, {"admin"});
             if (!decoded) return;
 
-            std::string instId = decoded->get_payload_claim("institution_id").as_string();
-            std::string teacherId = req.matches[1];
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                std::string teacherId = req.matches[1];
 
-            db.queryPrepared(
-                "DELETE FROM teachers WHERE id = ? AND institution_id = ?",
-                {teacherId, instId}
-            );
-            res.set_content("{\"message\":\"Teacher deleted\"}", "application/json");
+                db.queryPrepared(
+                    "DELETE FROM teachers WHERE id = ? AND institution_id = ?",
+                    {teacherId, instId}
+                );
+                res.set_content("{\"message\":\"Teacher deleted\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 409;
+                res.set_content("{\"error\":\"Cannot delete this teacher, they are still assigned to one or more classes\"}", "application/json");
+            }
         });
                 svr.Get("/api/v1/rooms", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
             auto decoded = requireAuth(req, res, {"admin"});
@@ -416,18 +427,23 @@ int main() {
             }
         });
 
-        svr.Delete(R"(/api/v1/rooms/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+                svr.Delete(R"(/api/v1/rooms/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
             auto decoded = requireAuth(req, res, {"admin"});
             if (!decoded) return;
 
-            std::string instId = decoded->get_payload_claim("institution_id").as_string();
-            std::string roomId = req.matches[1];
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                std::string roomId = req.matches[1];
 
-            db.queryPrepared(
-                "DELETE FROM rooms WHERE id = ? AND institution_id = ?",
-                {roomId, instId}
-            );
-            res.set_content("{\"message\":\"Room deleted\"}", "application/json");
+                db.queryPrepared(
+                    "DELETE FROM rooms WHERE id = ? AND institution_id = ?",
+                    {roomId, instId}
+                );
+                res.set_content("{\"message\":\"Room deleted\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 409;
+                res.set_content("{\"error\":\"Cannot delete this room, it is still used in a timetable\"}", "application/json");
+            }
         });
         std::cout << "Step 4: about to call listen() on 0.0.0.0:8080" << std::endl;
         bool ok = svr.listen("0.0.0.0", 8080);
