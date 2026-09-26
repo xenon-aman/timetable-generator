@@ -154,6 +154,63 @@ int main() {
         });
 
         // Create a new subject
+                svr.Post("/api/v1/classes", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                auto body = nlohmann::json::parse(req.body);
+                std::string name = body.at("name").get<std::string>();
+                int strength = body.value("strength", 0);
+
+                db.queryPrepared(
+                    "INSERT INTO classes (institution_id, name, strength) VALUES (?, ?, ?)",
+                    {instId, name, std::to_string(strength)}
+                );
+                res.status = 201;
+                res.set_content("{\"message\":\"Class created\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+            }
+        });
+
+        svr.Put(R"(/api/v1/classes/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                std::string classId = req.matches[1];
+                auto body = nlohmann::json::parse(req.body);
+                std::string name = body.at("name").get<std::string>();
+                int strength = body.value("strength", 0);
+
+                db.queryPrepared(
+                    "UPDATE classes SET name = ?, strength = ? WHERE id = ? AND institution_id = ?",
+                    {name, std::to_string(strength), classId, instId}
+                );
+                res.set_content("{\"message\":\"Class updated\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+            }
+        });
+
+        svr.Delete(R"(/api/v1/classes/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            std::string instId = decoded->get_payload_claim("institution_id").as_string();
+            std::string classId = req.matches[1];
+
+            db.queryPrepared(
+                "DELETE FROM classes WHERE id = ? AND institution_id = ?",
+                {classId, instId}
+            );
+            res.set_content("{\"message\":\"Class deleted\"}", "application/json");
+        });
         svr.Post("/api/v1/subjects", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
             auto decoded = requireAuth(req, res, {"admin"});
             if (!decoded) return;
@@ -212,6 +269,165 @@ int main() {
                 {subjectId, instId}
             );
             res.set_content("{\"message\":\"Subject deleted\"}", "application/json");
+        });
+                svr.Get("/api/v1/teachers", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            std::string instId = decoded->get_payload_claim("institution_id").as_string();
+            auto rows = db.queryPrepared(
+                "SELECT id, name, max_periods_day FROM teachers WHERE institution_id = ? ORDER BY name",
+                {instId}
+            );
+
+            nlohmann::json arr = nlohmann::json::array();
+            for (auto& row : rows) {
+                arr.push_back({
+                    {"id", row["id"]},
+                    {"name", row["name"]},
+                    {"max_periods_day", row["max_periods_day"]}
+                });
+            }
+            res.set_content(arr.dump(), "application/json");
+        });
+
+        svr.Post("/api/v1/teachers", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                auto body = nlohmann::json::parse(req.body);
+                std::string name = body.at("name").get<std::string>();
+                int maxPeriods = body.value("max_periods_day", 6);
+
+                db.queryPrepared(
+                    "INSERT INTO teachers (institution_id, name, max_periods_day) VALUES (?, ?, ?)",
+                    {instId, name, std::to_string(maxPeriods)}
+                );
+                res.status = 201;
+                res.set_content("{\"message\":\"Teacher created\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+            }
+        });
+
+        svr.Put(R"(/api/v1/teachers/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                std::string teacherId = req.matches[1];
+                auto body = nlohmann::json::parse(req.body);
+                std::string name = body.at("name").get<std::string>();
+                int maxPeriods = body.value("max_periods_day", 6);
+
+                db.queryPrepared(
+                    "UPDATE teachers SET name = ?, max_periods_day = ? WHERE id = ? AND institution_id = ?",
+                    {name, std::to_string(maxPeriods), teacherId, instId}
+                );
+                res.set_content("{\"message\":\"Teacher updated\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+            }
+        });
+
+        svr.Delete(R"(/api/v1/teachers/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            std::string instId = decoded->get_payload_claim("institution_id").as_string();
+            std::string teacherId = req.matches[1];
+
+            db.queryPrepared(
+                "DELETE FROM teachers WHERE id = ? AND institution_id = ?",
+                {teacherId, instId}
+            );
+            res.set_content("{\"message\":\"Teacher deleted\"}", "application/json");
+        });
+                svr.Get("/api/v1/rooms", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            std::string instId = decoded->get_payload_claim("institution_id").as_string();
+            auto rows = db.queryPrepared(
+                "SELECT id, name, room_type, capacity FROM rooms WHERE institution_id = ? ORDER BY name",
+                {instId}
+            );
+
+            nlohmann::json arr = nlohmann::json::array();
+            for (auto& row : rows) {
+                arr.push_back({
+                    {"id", row["id"]},
+                    {"name", row["name"]},
+                    {"room_type", row["room_type"]},
+                    {"capacity", row["capacity"]}
+                });
+            }
+            res.set_content(arr.dump(), "application/json");
+        });
+
+        svr.Post("/api/v1/rooms", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                auto body = nlohmann::json::parse(req.body);
+                std::string name = body.at("name").get<std::string>();
+                std::string roomType = body.value("room_type", "classroom");
+                int capacity = body.at("capacity").get<int>();
+
+                db.queryPrepared(
+                    "INSERT INTO rooms (institution_id, name, room_type, capacity) VALUES (?, ?, ?, ?)",
+                    {instId, name, roomType, std::to_string(capacity)}
+                );
+                res.status = 201;
+                res.set_content("{\"message\":\"Room created\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+            }
+        });
+
+        svr.Put(R"(/api/v1/rooms/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                std::string roomId = req.matches[1];
+                auto body = nlohmann::json::parse(req.body);
+                std::string name = body.at("name").get<std::string>();
+                std::string roomType = body.value("room_type", "classroom");
+                int capacity = body.at("capacity").get<int>();
+
+                db.queryPrepared(
+                    "UPDATE rooms SET name = ?, room_type = ?, capacity = ? WHERE id = ? AND institution_id = ?",
+                    {name, roomType, std::to_string(capacity), roomId, instId}
+                );
+                res.set_content("{\"message\":\"Room updated\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+            }
+        });
+
+        svr.Delete(R"(/api/v1/rooms/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            std::string instId = decoded->get_payload_claim("institution_id").as_string();
+            std::string roomId = req.matches[1];
+
+            db.queryPrepared(
+                "DELETE FROM rooms WHERE id = ? AND institution_id = ?",
+                {roomId, instId}
+            );
+            res.set_content("{\"message\":\"Room deleted\"}", "application/json");
         });
         std::cout << "Step 4: about to call listen() on 0.0.0.0:8080" << std::endl;
         bool ok = svr.listen("0.0.0.0", 8080);
