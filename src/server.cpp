@@ -1,5 +1,6 @@
 #include <iostream>
 #include <optional>
+#include <algorithm>
 #include "httplib.h"
 #include "config.hpp"
 #include "db.hpp"
@@ -22,9 +23,11 @@ int main() {
         httplib::Server svr;
 
         // Reads the "Authorization: Bearer <token>" header, verifies it, and
-        // returns the decoded token if valid. Returns std::nullopt (and writes
-        // a 401 response) if missing, malformed, or invalid.
-        auto requireAuth = [&tokens](const httplib::Request& req, httplib::Response& res)
+        // (if allowedRoles is non-empty) checks the token's role is in that list.
+        // Returns the decoded token if everything checks out, writes an
+        // appropriate error response and returns std::nullopt otherwise.
+        auto requireAuth = [&tokens](const httplib::Request& req, httplib::Response& res,
+                                      std::vector<std::string> allowedRoles = {})
                 -> std::optional<jwt::decoded_jwt<jwt::traits::nlohmann_json>> {
             auto authHeader = req.get_header_value("Authorization");
             const std::string prefix = "Bearer ";
@@ -34,13 +37,26 @@ int main() {
                 return std::nullopt;
             }
             std::string token = authHeader.substr(prefix.size());
+
+            std::optional<jwt::decoded_jwt<jwt::traits::nlohmann_json>> decoded;
             try {
-                return tokens.verifyToken(token);
-            } catch (const std::exception& e) {
+                decoded = tokens.verifyToken(token);
+            } catch (const std::exception&) {
                 res.status = 401;
                 res.set_content("{\"error\":\"Invalid or expired token\"}", "application/json");
                 return std::nullopt;
             }
+
+            if (!allowedRoles.empty()) {
+                std::string role = decoded->get_payload_claim("role").as_string();
+                bool ok = std::find(allowedRoles.begin(), allowedRoles.end(), role) != allowedRoles.end();
+                if (!ok) {
+                    res.status = 403;
+                    res.set_content("{\"error\":\"You do not have permission to access this\"}", "application/json");
+                    return std::nullopt;
+                }
+            }
+            return decoded;
         };
 
         svr.Get("/", [](const httplib::Request&, httplib::Response& res) {
@@ -115,7 +131,88 @@ int main() {
             };
             res.set_content(result.dump(), "application/json");
         });
+                // List all subjects for the logged-in admin's institution
+        svr.Get("/api/v1/subjects", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
 
+            std::string instId = decoded->get_payload_claim("institution_id").as_string();
+            auto rows = db.queryPrepared(
+                "SELECT id, name, is_lab FROM subjects WHERE institution_id = ? ORDER BY name",
+                {instId}
+            );
+
+            nlohmann::json arr = nlohmann::json::array();
+            for (auto& row : rows) {
+                arr.push_back({
+                    {"id", row["id"]},
+                    {"name", row["name"]},
+                    {"is_lab", row["is_lab"] == "1"}
+                });
+            }
+            res.set_content(arr.dump(), "application/json");
+        });
+
+        // Create a new subject
+        svr.Post("/api/v1/subjects", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                auto body = nlohmann::json::parse(req.body);
+                std::string name = body.at("name").get<std::string>();
+                bool isLab = body.value("is_lab", false);
+
+                db.queryPrepared(
+                    "INSERT INTO subjects (institution_id, name, is_lab) VALUES (?, ?, ?)",
+                    {instId, name, isLab ? "1" : "0"}
+                );
+                res.status = 201;
+                res.set_content("{\"message\":\"Subject created\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+            }
+        });
+
+        // Update an existing subject
+        svr.Put(R"(/api/v1/subjects/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            try {
+                std::string instId = decoded->get_payload_claim("institution_id").as_string();
+                std::string subjectId = req.matches[1];
+                auto body = nlohmann::json::parse(req.body);
+                std::string name = body.at("name").get<std::string>();
+                bool isLab = body.value("is_lab", false);
+
+                db.queryPrepared(
+                    "UPDATE subjects SET name = ?, is_lab = ? WHERE id = ? AND institution_id = ?",
+                    {name, isLab ? "1" : "0", subjectId, instId}
+                );
+                res.set_content("{\"message\":\"Subject updated\"}", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+            }
+        });
+
+        // Delete a subject
+        svr.Delete(R"(/api/v1/subjects/(\d+))", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            std::string instId = decoded->get_payload_claim("institution_id").as_string();
+            std::string subjectId = req.matches[1];
+
+            db.queryPrepared(
+                "DELETE FROM subjects WHERE id = ? AND institution_id = ?",
+                {subjectId, instId}
+            );
+            res.set_content("{\"message\":\"Subject deleted\"}", "application/json");
+        });
         std::cout << "Step 4: about to call listen() on 0.0.0.0:8080" << std::endl;
         bool ok = svr.listen("0.0.0.0", 8080);
         std::cout << "Step 5: listen() returned: " << ok << std::endl;
@@ -123,5 +220,5 @@ int main() {
     } catch (const std::exception& e) {
         std::cout << "CRASHED WITH ERROR: " << e.what() << std::endl;
     }
-     std::cout << "Step 6: main() ending" << std::endl;
+    std::cout << "Step 6: main() ending" << std::endl;
 }
