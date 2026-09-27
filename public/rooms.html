@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Rooms - Timetable Generator</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav>
+        <a href="subjects.html">Subjects</a>
+        <a href="teachers.html">Teachers</a>
+        <a href="rooms.html">Rooms</a>
+        <a href="classes.html">Classes</a>
+        <div class="spacer"></div>
+        <button onclick="logout()">Logout</button>
+    </nav>
+
+    <main>
+        <h1>Rooms</h1>
+
+        <div class="form-box">
+            <input type="text" id="name" placeholder="Room name">
+            <select id="roomType">
+                <option value="classroom">Classroom</option>
+                <option value="lab">Lab</option>
+            </select>
+            <input type="number" id="capacity" placeholder="Capacity" style="width:100px;">
+            <button onclick="createRoom()">Add Room</button>
+        </div>
+
+        <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Capacity</th><th>Actions</th></tr></thead>
+            <tbody id="rows"></tbody>
+        </table>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        requireLogin();
+
+        async function load() {
+            const items = await apiFetch("/api/v1/rooms");
+            const rows = document.getElementById("rows");
+            rows.innerHTML = "";
+            items.forEach(r => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${r.name}</td>
+                    <td>${r.room_type}</td>
+                    <td>${r.capacity}</td>
+                    <td class="actions">
+                        <button class="edit" onclick="editItem(${r.id}, '${r.name}', '${r.room_type}', ${r.capacity})">Edit</button>
+                        <button class="delete" onclick="deleteItem(${r.id})">Delete</button>
+                    </td>
+                `;
+                rows.appendChild(tr);
+            });
+        }
+
+        async function createRoom() {
+            const name = document.getElementById("name").value.trim();
+            const roomType = document.getElementById("roomType").value;
+            const capacity = parseInt(document.getElementById("capacity").value) || 0;
+            if (!name) return alert("Please enter a room name");
+
+            await apiFetch("/api/v1/rooms", {
+                method: "POST",
+                body: JSON.stringify({ name, room_type: roomType, capacity })
+            });
+            document.getElementById("name").value = "";
+            document.getElementById("capacity").value = "";
+            load();
+        }
+
+        async function editItem(id, currentName, currentType, currentCapacity) {
+            const name = prompt("Room name:", currentName);
+            if (name === null) return;
+            const roomType = confirm("Is this a lab? (OK = lab, Cancel = classroom)") ? "lab" : "classroom";
+            const capacity = parseInt(prompt("Capacity:", currentCapacity)) || currentCapacity;
+
+            await apiFetch(`/api/v1/rooms/${id}`, {
+                method: "PUT",
+                body: JSON.stringify({ name, room_type: roomType, capacity })
+            });
+            load();
+        }
+
+        async function deleteItem(id) {
+            if (!confirm("Delete this room?")) return;
+            try {
+                await apiFetch(`/api/v1/rooms/${id}`, { method: "DELETE" });
+                load();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        load();
+    </script>
+</body>
+</html>

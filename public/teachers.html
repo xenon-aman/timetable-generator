@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Teachers - Timetable Generator</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav>
+        <a href="subjects.html">Subjects</a>
+        <a href="teachers.html">Teachers</a>
+        <a href="rooms.html">Rooms</a>
+        <a href="classes.html">Classes</a>
+        <div class="spacer"></div>
+        <button onclick="logout()">Logout</button>
+    </nav>
+
+    <main>
+        <h1>Teachers</h1>
+
+        <div class="form-box">
+            <input type="text" id="name" placeholder="Teacher name">
+            <input type="number" id="maxPeriods" placeholder="Max periods/day" value="6" style="width:120px;">
+            <button onclick="createTeacher()">Add Teacher</button>
+        </div>
+
+        <table>
+            <thead><tr><th>Name</th><th>Max periods/day</th><th>Actions</th></tr></thead>
+            <tbody id="rows"></tbody>
+        </table>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        requireLogin();
+
+        async function load() {
+            const items = await apiFetch("/api/v1/teachers");
+            const rows = document.getElementById("rows");
+            rows.innerHTML = "";
+            items.forEach(t => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${t.name}</td>
+                    <td>${t.max_periods_day}</td>
+                    <td class="actions">
+                        <button class="edit" onclick="editItem(${t.id}, '${t.name}', ${t.max_periods_day})">Edit</button>
+                        <button class="delete" onclick="deleteItem(${t.id})">Delete</button>
+                    </td>
+                `;
+                rows.appendChild(tr);
+            });
+        }
+
+        async function createTeacher() {
+            const name = document.getElementById("name").value.trim();
+            const maxPeriods = parseInt(document.getElementById("maxPeriods").value) || 6;
+            if (!name) return alert("Please enter a teacher name");
+
+            await apiFetch("/api/v1/teachers", {
+                method: "POST",
+                body: JSON.stringify({ name, max_periods_day: maxPeriods })
+            });
+            document.getElementById("name").value = "";
+            load();
+        }
+
+        async function editItem(id, currentName, currentMax) {
+            const name = prompt("Teacher name:", currentName);
+            if (name === null) return;
+            const maxPeriods = parseInt(prompt("Max periods per day:", currentMax)) || currentMax;
+
+            await apiFetch(`/api/v1/teachers/${id}`, {
+                method: "PUT",
+                body: JSON.stringify({ name, max_periods_day: maxPeriods })
+            });
+            load();
+        }
+
+        async function deleteItem(id) {
+            if (!confirm("Delete this teacher?")) return;
+            try {
+                await apiFetch(`/api/v1/teachers/${id}`, { method: "DELETE" });
+                load();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        load();
+    </script>
+</body>
+</html>
