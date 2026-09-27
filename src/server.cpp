@@ -1,6 +1,7 @@
 #include <iostream>
 #include <optional>
 #include <algorithm>
+#include "solver.hpp"
 #include "httplib.h"
 #include "config.hpp"
 #include "db.hpp"
@@ -131,6 +132,17 @@ int main() {
                 {"institution_id", decoded->get_payload_claim("institution_id").as_string()}
             };
             res.set_content(result.dump(), "application/json");
+        });
+                svr.Get("/api/v1/test-solver-load", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
+            auto decoded = requireAuth(req, res, {"admin"});
+            if (!decoded) return;
+
+            int instId = std::stoi(decoded->get_payload_claim("institution_id").as_string());
+            Solver solver(db, instId);
+            solver.loadData();
+            solver.printSummary();
+
+            res.set_content("{\"message\":\"Check your server console for output\"}", "application/json");
         });
                 // List all subjects for the logged-in admin's institution
         svr.Get("/api/v1/subjects", [&db, &requireAuth](const httplib::Request& req, httplib::Response& res) {
